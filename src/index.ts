@@ -93,6 +93,34 @@ async function streamVoiceMessage(
   }
 }
 
+function streamMessage(
+  message: string,
+  socketId: string,
+  status: boolean,
+  stepData: string,
+) {
+  const sock = connectedSockets.get(socketId);
+  console.log("stepData", stepData);
+  if (sock) {
+    sock.emit("streamMessage", { message, status, stepData });
+    if (status) {
+      lastStreamingMessage.set(socketId, message);
+    }
+    console.log(
+      "streamMessage sent:",
+      message,
+      "to",
+      socketId,
+      "status",
+      status,
+      "stepData",
+      stepData,
+    );
+  } else {
+    console.log("❌ Invalid socketId:", socketId);
+  }
+}
+
 const streamVoiceMessageController = (req: any, res: any) => {
   const { message, socketId, status } = req.body;
 
@@ -105,6 +133,19 @@ const streamVoiceMessageController = (req: any, res: any) => {
   }
 
   streamVoiceMessage(message, socketId, status);
+  return res.json({ ok: true });
+};
+
+const streamMessageController = (req: any, res: any) => {
+  const { message, socketId, status, extraData } = req.body;
+
+  if (!message || !socketId || !status) {
+    return res
+      .status(400)
+      .json({ error: "message, socketId, and status required" });
+  }
+
+  streamMessage(message, socketId, status, extraData || "");
   return res.json({ ok: true });
 };
 
@@ -123,6 +164,7 @@ app.use(
 );
 
 app.post("/stream-voice-message", streamVoiceMessageController);
+app.post("/stream-message", streamMessageController);
 
 const pendingAbortRequests = new Map<
   string,
