@@ -2,14 +2,15 @@ import { createServer } from "http";
 import { Server, Socket } from "socket.io";
 import express from "express";
 import cors from "cors";
-import { createClient } from "@deepgram/sdk";
+// import { createClient } from "@deepgram/sdk";
 import dotenv from "dotenv";
+import { CartesiaClient } from "@cartesia/cartesia-js";
 
 const app = express();
 
 dotenv.config();
 
-const deepgram = createClient(process.env.DEEPGRAM_API_KEY!);
+// const deepgram = createClient(process.env.DEEPGRAM_API_KEY!);
 
 const connectedSockets: Map<string, Socket> = new Map();
 
@@ -34,6 +35,10 @@ interface Question {
   for: Service[];
 }
 
+const cartesiaClient = new CartesiaClient({
+  apiKey: process.env.CARTESIA_API_KEY!,
+});
+
 async function streamVoiceMessage(
   message: string,
   socketId: string,
@@ -47,41 +52,82 @@ async function streamVoiceMessage(
 
   console.log("inside here");
 
-  const response = await deepgram.speak.request(
-    { text: message },
-    {
-      model: "aura-2-thalia-en",
-      // encoding: "linear16",
-      // container: "wav",
-      encoding: "linear16",
-      container: "wav",
-      sample_rate: 48000,
-    },
-  );
+  // const response = await deepgram.speak.request(
+  //   { text: message },
+  //   {
+  //     model: "aura-2-thalia-en",
+  //     // encoding: "linear16",
+  //     // container: "wav",
+  //     encoding: "linear16",
+  //     container: "wav",
+  //     sample_rate: 48000,
+  //   },
+  // );
 
-  const stream = await response.getStream();
-  if (!stream) throw new Error("Audio generation failed");
+    const response = await cartesiaClient.tts.bytes({
+      modelId: "sonic-english",
+      transcript: message,
+      voice: {
+        mode: "id",
+        id: "79a125e8-cd45-4c13-8a67-188112f4dd22",
+      },
+      outputFormat: {
+        container: "wav",
+        encoding: "pcm_f32le",
+        sampleRate: 44100,
+      },
+    });
 
-  const reader = stream.getReader();
+  // const stream = await response.getStream();
+  // if (!stream) throw new Error("Audio generation failed");
+
+  // const reader = stream.getReader();
 
   // // Send text metadata once
   // console.log("sent here");
   // sock.emit("streamVoiceMessage", { message, status });
 
-  const chunks = [];
+  // const chunks = [];
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    // console.log("sent audoStream")
-    // console.log("sending chunk");
-    // sock.emit("audioStream", Buffer.from(value));
-    chunks.push(value);
-  }
+  // while (true) {
+  //   const { done, value } = await reader.read();
+  //   if (done) break;
+  //   // console.log("sent audoStream")
+  //   // console.log("sending chunk");
+  //   // sock.emit("audioStream", Buffer.from(value));
+  //   chunks.push(value);
+  // }
 
-  const audioBuffer = Buffer.concat(chunks);
+  // const audioBuffer = Buffer.concat(chunks);
 
-  sock.emit("streamVoiceMessage", { message, status, audioBuffer });
+  let finalBuffer: Buffer;
+
+  if (Buffer.isBuffer(response)) {
+      finalBuffer = response;
+    } else if (response && typeof (response as any).arrayBuffer === "function") {
+      finalBuffer = Buffer.from(await (response as any).arrayBuffer());
+    } else if (response && typeof (response as any).buffer === "function") {
+      finalBuffer = Buffer.from(await (response as any).buffer());
+    } else {
+      // Is it an async iterable stream? (Node18UniversalStreamWrapper likely is)
+      try {
+        const chunks: any[] = [];
+        // @ts-ignore
+        for await (const chunk of response) {
+          chunks.push(chunk);
+        }
+        finalBuffer = Buffer.concat(chunks);
+      } catch (err) {
+        console.error("Failed to consume stream:", err);
+        // Last resort fallback
+        // @ts-ignore
+        finalBuffer = Buffer.from(response);
+      }
+    }
+
+    const audioBase64 = finalBuffer.toString("base64");
+
+  sock.emit("streamVoiceMessage", { message, status, audioBuffer: audioBase64 });
 
   console.log("done sending audio streams");
 

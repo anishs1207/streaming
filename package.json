@@ -9,6 +9,7 @@
     "start": "npx tsc && node dist/index.js"
   },
   "dependencies": {
+    "@cartesia/cartesia-js": "^2.2.9",
     "@deepgram/sdk": "^4.11.3",
     "@types/axios": "^0.9.36",
     "@types/dotenv": "^6.1.1",
