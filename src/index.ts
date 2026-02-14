@@ -222,8 +222,9 @@ const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
     // write the frontend here
-    origin: "http://localhost:3001",
-    methods: ["GET", "POST"],
+    origin: ["http://localhost:3001", "https://paxio.tech", "https://www.paxio.tech"],
+    methods: ["GET", "POST", "OPTIONS"],
+    credentials: true
   },
 });
 
